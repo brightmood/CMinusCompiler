@@ -1,4 +1,4 @@
 int main(int a, int b)
 {
-    String a = 'l';
+    String a =-a[3];
 }

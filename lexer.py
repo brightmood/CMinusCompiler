@@ -19,12 +19,11 @@ letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
 
 digits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
 
-single_operators = ['>', '<', '=', '+', '*', '/', '%', '!', '&', '|']
+single_operators = ['>', '<', '+', '*', '/', '%', '!', '&', '|']
 
 terminate_operators = [',', ';', '[', ']', '(', ')', '{', '}']
 
-double_operator = ['>=', '<=', '==', '+=', '-=', '*=', '++',
-                   '--', "/=", '%=', '&&', '||', '<<', '>>', '!=']
+double_operator = ['>=', '<=', '==', '&&', '||', '<<', '>>', '!=']
 
 
 #对于DFA状态转换表来说，有很多可以压缩的地方，把字母压缩成letters，数字压缩成digits等等
@@ -47,7 +46,7 @@ EqualTypeTable = generate_equal_type()
 #DFAState transform table
 def build_transform_table():
     table = {}
-    state_num = 17
+    state_num = 18
     for i in range(0, state_num):
         table[i] = {}
     table[1]['letters'] = 2
@@ -58,18 +57,20 @@ def build_transform_table():
     table[1]['"'] = 11
     table[1]["'"] = 14
     table[1]['terminate_operators'] = 6
+    table[1]['='] = 17
 
     table[2]['letters'] = 2
     table[2]['digits'] = 2
     table[2]['0'] = 2
 
     table[3]['-'] = 5
-    table[3]['single_operators'] = 5
     table[3]['0'] = 7
     table[3]['digits'] = 8
+    table[3]['='] = 5
 
     table[4]['-'] = 5
     table[4]['single_operators'] = 5
+    table[4]['='] = 5
 
     table[7]['.'] = 9
 
@@ -92,6 +93,8 @@ def build_transform_table():
     table[14]["any"] = 15
 
     table[15]["'"] = 16
+
+    table[17]['='] = 5
     return table
 
 
@@ -106,7 +109,8 @@ AcceptedState = {
     8: LexmeType.Integer,
     10: LexmeType.Integer,
     13: LexmeType.String,
-    16: LexmeType.Char
+    16: LexmeType.Char,
+    17: LexmeType.Operator
 }
 
 

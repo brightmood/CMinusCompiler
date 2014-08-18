@@ -10,12 +10,12 @@ if __name__ == '__main__':
             try:
                 f = open(filename, "r")
                 lexer = Lexer(f)
-                token = lexer.get_next_token()
-                while token:
-                    token = lexer.get_next_token()
-                f.close()
-                # parser = Parser(lexer)
-                # parser.process()
+                # token = lexer.get_next_token()
+                # while token:
+                #     token = lexer.get_next_token()
+                # f.close()
+                parser = Parser(lexer)
+                parser.process()
             except IOError, e:
                 print "Can not find source file"
     else:
