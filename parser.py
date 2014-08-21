@@ -1,23 +1,30 @@
 # coding=utf-8
 
+from lexer import LexmeType
+
 
 class Parser:
-
     def __init__(self, lexer):
         self.lexer = lexer
         self.llk = []
         self.llk.append(self.lexer.get_next_token())
-        self.cursor = 0
+        self.context = ASTContext(None)
+    # self.cursor = 0
 
     def lookup_for_n(self, n):
-        time = n + 1 - self.cursor
-        if time > 0:
-            for x in range(1, time):
+        length = len(self.llk)
+        if n > length - 1:
+            for x in range(1, n + 1 - length):
                 self.llk.append(self.lexer.get_next_token())
-        return self.llk[n].word
+        return self.llk[n]
+
+    def move_for_n(self, n):
+        self.lookup_for_n(n)
+        self.llk = self.llk[n:]
+        return self.llk[0]
 
     def get_current_token(self):
-        return self.llk[self.cursor].word
+        return self.llk[0]
 
     def process(self):
         self.parse_program()
@@ -28,25 +35,53 @@ class Parser:
 
     def parse_e(self):
         token = self.get_current_token()
-        if token == '':
+        if token.word == '':
             return
         else:
             self.parse_d()
             self.parse_e()
 
     def parse_d(self):
-        token = self.lookup_for_n(2)
-        if token == '(':
-            self.parse_func_prototype()
-            self.parse_s()
-        else:
+        token = self.get_current_token()
+        if token.lexmeType == LexmeType.Variable:
             self.parse_f()
+        else:
+            look_forward2 = self.lookup_for_n(2)
+            if look_forward2.word == '(':
+                self.parse_func_prototype()
+                self.parse_s()
+            else:
+                self.parse_f()
 
     def parse_statement(self):
         pass
 
     def parse_f(self):
-        pass
+        token = self.get_current_token()
+        if token.lexmeType == LexmeType.Variable:
+            look_forward_1 = self.lookup_for_n(1)
+            if look_forward_1.word == '[':
+                self.parse_array_assign()
+            elif look_forward_1.word == '=':
+                self.parse_var_assign()
+            else:
+                self.print_error(look_forward_1, ['[', '='])
+        elif token.word == 'int' or token.word == 'char' \
+                or token.word == 'String' or token.word == 'double':
+            look_forward_2 = self.lookup_for_n(2)
+            if look_forward_2.word == ';':
+                self.parse_var_decl()
+            elif look_forward_2.word == '[':
+                look_forward_5 = self.lookup_for_n(5)
+                if look_forward_5 == ';':
+                    self.parse_array_decl()
+                else:
+                    self.parse_array_decl_and_assign()
+            elif look_forward_2.word == '=':
+                self.parse_var_decl_and_assign()
+            else:
+                self.print_error(look_forward_2, [';', '[', '='])
+
 
     def parse_func_prototype(self):
         pass
@@ -55,7 +90,9 @@ class Parser:
         pass
 
     def parse_var_decl(self):
-        pass
+        token = self.move_for_n(1)
+        if token.lexmeType == LexmeType.Variable:
+            pass
 
     def parse_array_decl(self):
         pass
@@ -134,3 +171,14 @@ class Parser:
 
     def parse_atom(self):
         pass
+
+    @staticmethod
+    def print_error(lexme, expected):
+        print "syntax error at line %d column %d expected %s"(lexme.line_num, lexme.column_num, expected)
+
+
+class ASTContext:
+    def __init__(self, parent_context):
+        self.type_table = {}
+        self.value_table = {}
+        self.parent_context = parent_context

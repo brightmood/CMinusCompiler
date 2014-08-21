@@ -1,4 +1,4 @@
 CMinusCompiler
 ==============
 
-A C-style compiler with pyllvm
+A C-style compiler with llvmpy
