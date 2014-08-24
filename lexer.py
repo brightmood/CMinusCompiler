@@ -14,7 +14,7 @@ ReserveWord = ('char', 'int', 'double', 'void', 'if', 'else',
 
 letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
            'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'
-           'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+           'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J','K', 'L', 'M',
            'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
 
 digits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
@@ -26,7 +26,7 @@ terminate_operators = [',', ';', '[', ']', '(', ')', '{', '}']
 double_operator = ['>=', '<=', '==', '&&', '||', '<<', '>>', '!=']
 
 
-#对于DFA状态转换表来说，有很多可以压缩的地方，把字母压缩成letters，数字压缩成digits等等
+# 对于DFA状态转换表来说，有很多可以压缩的地方，把字母压缩成letters，数字压缩成digits等等
 def generate_equal_type():
     equal_type_table = {}
     for i in letters:
@@ -43,7 +43,7 @@ def generate_equal_type():
 
 EqualTypeTable = generate_equal_type()
 
-#DFAState transform table
+# DFAState transform table
 def build_transform_table():
     table = {}
     state_num = 18
@@ -107,7 +107,7 @@ AcceptedState = {
     6: LexmeType.Operator,
     7: LexmeType.Integer,
     8: LexmeType.Integer,
-    10: LexmeType.Integer,
+    10: LexmeType.Double,
     13: LexmeType.String,
     16: LexmeType.Char,
     17: LexmeType.Operator
@@ -123,6 +123,10 @@ class Lexme:
 
     def to_string(self):
         return "\"%s\" at line %d, column %d" % (self.word, self.line_num, self.column_num)
+
+    def is_type(self):
+        return self.word == 'int' or self.word == 'char' \
+            or self.word == 'String' or self.word == 'double'
 
 
 class Lexer:
