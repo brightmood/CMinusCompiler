@@ -16,7 +16,7 @@ class Parser:
     def lookup_for_n(self, n):
         length = len(self.llk)
         if n > length - 1:
-            for x in range(1, n + 1 - length):
+            for x in range(0, n + 1 - length):
                 self.llk.append(self.lexer.get_next_token())
         return self.llk[n]
 
@@ -38,13 +38,16 @@ class Parser:
         nodes = self.parse_e()
         if nodes is not None:
             nodes.insert(0, node)
-        programe_node = ast.ProgramNode(self.context)
-        programe_node.children = nodes
+        else:
+            nodes = [node]
+        programe_node = ast.ProgramNode(self.context, nodes)
         return programe_node
 
     def parse_e(self):
         token = self.get_current_token()
         nodes = []
+        if token is None:
+            return
         if token.word == '':
             return
         else:
@@ -108,7 +111,7 @@ class Parser:
             self.move_for_n(1)
             nodes = self.parse_stmtlist()
             right_bracket = self.get_current_token()
-            if right_bracket == '}':
+            if right_bracket.word == '}':
                 self.move_for_n(1)
                 return nodes
             else:
@@ -132,6 +135,14 @@ class Parser:
                     self.print_error(right_brace, ')')
             else:
                 self.print_error(left_brace, '(')
+        elif token.word == 'return':
+            self.move_for_n(1)
+            node = self.parse_expr_or_string()
+            if self.get_current_token().word == ';':
+                self.move_for_n(1)
+                return ast.ReturnNode(self.context, node)
+        else:
+            self.print_error(token, ['<legal identifier>', 'while', 'return', 'if', '<type'])
 
     def parse_stmtlist(self):
         nodes = []
@@ -140,7 +151,9 @@ class Parser:
             return
         else:
             nodes.append(self.parse_statement())
-            nodes.append(self.parse_stmtlist())
+            stmtnodes = self.parse_stmtlist()
+            if stmtnodes is not None:
+                nodes.extend(stmtnodes)
             return nodes
 
     def parse_else_statement(self):
@@ -388,8 +401,11 @@ class Parser:
             self.move_for_n(1)
             left = self.parse_logic_and()
             rest = self.parse_lo()
-            node = ast.BinaryExprNode(self.context, left, rest[0], rest[1])
-            return [token.word, node]
+            if rest is not None:
+                node = ast.BinaryExprNode(self.context, left, rest[0], rest[1])
+                return [token.word, node]
+            else:
+                return [token.word, left]
         else:
             return
 
@@ -407,8 +423,11 @@ class Parser:
             self.move_for_n(1)
             left = self.parse_bit_or()
             rest = self.parse_la()
-            node = ast.BinaryExprNode(self.context, left, rest[0], rest[1])
-            return [token.word, node]
+            if rest is not None:
+                node = ast.BinaryExprNode(self.context, left, rest[0], rest[1])
+                return [token.word, node]
+            else:
+                return [token.word, left]
         else:
             return
 
@@ -426,8 +445,11 @@ class Parser:
             self.move_for_n(1)
             left = self.parse_bit_and()
             rest = self.parse_bo()
-            node = ast.BinaryExprNode(self.context, left, rest[0], rest[1])
-            return [token.word, node]
+            if rest is not None:
+                node = ast.BinaryExprNode(self.context, left, rest[0], rest[1])
+                return [token.word, node]
+            else:
+                return [token.word, left]
         else:
             return
 
@@ -445,8 +467,11 @@ class Parser:
             self.move_for_n(1)
             left = self.parse_equal_or_not()
             rest = self.parse_ba()
-            node = ast.BinaryExprNode(self.context, left, rest[0], rest[1])
-            return [token.word, node]
+            if rest is not None:
+                node = ast.BinaryExprNode(self.context, left, rest[0], rest[1])
+                return [token.word, node]
+            else:
+                return [token.word, left]
         else:
             return
 
@@ -464,8 +489,11 @@ class Parser:
             self.move_for_n(1)
             left = self.parse_compare()
             rest = self.parse_eon()
-            node = ast.BinaryExprNode(self.context, left, rest[0], rest[1])
-            return [token.word, node]
+            if rest is not None:
+                node = ast.BinaryExprNode(self.context, left, rest[0], rest[1])
+                return [token.word, node]
+            else:
+                return [token.word, left]
         else:
             return
 
@@ -483,8 +511,11 @@ class Parser:
             self.move_for_n(1)
             left = self.parse_bit_shift()
             rest = self.parse_c()
-            node = ast.BinaryExprNode(self.context, left, rest[0], rest[1])
-            return [token.word, node]
+            if rest is not None:
+                node = ast.BinaryExprNode(self.context, left, rest[0], rest[1])
+                return [token.word, node]
+            else:
+                return [token.word, left]
         else:
             return
 
@@ -502,8 +533,11 @@ class Parser:
             self.move_for_n(1)
             left = self.parse_plus_minus()
             rest = self.parse_bs()
-            node = ast.BinaryExprNode(self.context, left, rest[0], rest[1])
-            return [token.word, node]
+            if rest is not None:
+                node = ast.BinaryExprNode(self.context, left, rest[0], rest[1])
+                return [token.word, node]
+            else:
+                return [token.word, left]
         else:
             return
 
@@ -521,8 +555,11 @@ class Parser:
             self.move_for_n(1)
             left = self.parse_multi_divide()
             rest = self.parse_pm()
-            node = ast.BinaryExprNode(self.context, left, rest[0], rest[1])
-            return [token.word, node]
+            if rest is not None:
+                node = ast.BinaryExprNode(self.context, left, rest[0], rest[1])
+                return [token.word, node]
+            else:
+                return [token.word, left]
         else:
             return
 
@@ -593,7 +630,7 @@ class Parser:
 
     @staticmethod
     def print_error(lexme, expected):
-        print "syntax error at line %d column %d expected %s"(lexme.line_num, lexme.column_num, expected)
+        print "syntax error at line %d column %d, expected " % (lexme.line_num, lexme.column_num), expected
         exit(1)
 
 

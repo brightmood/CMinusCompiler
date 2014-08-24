@@ -1,4 +1,10 @@
-int main(int a, int b)
+int main()
 {
-    String a =-a[3];
+    int a = 1;
+    double b = 1;
+    int c = a + b;
+    while(a > b){
+        a = a - 1;
+    }
+    return c;
 }

@@ -15,7 +15,9 @@ if __name__ == '__main__':
                 #     token = lexer.get_next_token()
                 # f.close()
                 parser = Parser(lexer)
-                parser.process()
+                ast_tree = parser.process()
+                f.close()
+                ast_tree.print_ast()
             except IOError, e:
                 print "Can not find source file"
     else:
