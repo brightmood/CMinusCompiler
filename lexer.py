@@ -14,7 +14,8 @@ ReserveWord = ('char', 'int', 'double', 'void', 'if', 'else',
 
 letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
            'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'
-           'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J','K', 'L', 'M',
+                                                                       'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
+           'K', 'L', 'M',
            'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
 
 digits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
@@ -43,7 +44,7 @@ def generate_equal_type():
 
 EqualTypeTable = generate_equal_type()
 
-# DFAState transform table
+
 def build_transform_table():
     table = {}
     state_num = 18
@@ -126,7 +127,7 @@ class Lexme:
 
     def is_type(self):
         return self.word == 'int' or self.word == 'char' \
-            or self.word == 'String' or self.word == 'double'
+               or self.word == 'String' or self.word == 'double'
 
 
 class Lexer:
@@ -149,7 +150,7 @@ class Lexer:
         return self.dfa()
 
     def dfa(self):
-        #dfa initiate state is 1
+        # dfa initiate state is 1
         state = 1
         length = 0
 

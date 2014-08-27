@@ -2,6 +2,7 @@
 
 from lexer import LexmeType
 import ast
+import cmexception
 
 
 class Parser:
@@ -40,8 +41,8 @@ class Parser:
             nodes.insert(0, node)
         else:
             nodes = [node]
-        programe_node = ast.ProgramNode(self.context, nodes)
-        return programe_node
+        program_node = ast.ProgramNode(self.context, nodes)
+        return program_node
 
     def parse_e(self):
         token = self.get_current_token()
@@ -52,7 +53,9 @@ class Parser:
             return
         else:
             nodes.append(self.parse_global())
-            nodes.extend(self.parse_e())
+            rest = self.parse_e()
+            if rest is not None:
+                nodes.extend(rest)
             return nodes
 
     def parse_global(self):
@@ -77,7 +80,7 @@ class Parser:
             elif look_forward_2.word == '=':
                 return self.parse_var_decl_and_assign()
             else:
-                self.print_error(look_forward_2, [';', '[', '='])
+                raise cmexception.SyntaxException(look_forward_2, [';', '[', '='])
 
     def parse_statement(self):
         token = self.get_current_token()
@@ -89,14 +92,14 @@ class Parser:
                 return self.parse_var_decl_and_assign()
             elif lookup2.word == '[':
                 lookup5 = self.lookup_for_n(5)
-                if lookup5 == '=':
+                if lookup5.word == '=':
                     return self.parse_array_decl_and_assign()
-                elif lookup5 == ';':
+                elif lookup5.word == ';':
                     return self.parse_array_decl()
                 else:
-                    self.print_error(lookup5, ['=', ';'])
+                    raise cmexception.SyntaxException(lookup5, ['=', ';'])
             else:
-                self.print_error(lookup2, [';', '=', '['])
+                raise cmexception.SyntaxException(lookup2, [';', '=', '['])
         elif token.lexme_type == LexmeType.Variable:
             lookup1 = self.lookup_for_n(1)
             if lookup1.word == '[':
@@ -106,7 +109,7 @@ class Parser:
             elif lookup1.word == '(':
                 return self.parse_function_call()
             else:
-                self.print_error(lookup1, ['=', '['])
+                raise cmexception.SyntaxException(lookup1, ['=', '['])
         elif token.word == '{':
             self.move_for_n(1)
             nodes = self.parse_stmtlist()
@@ -115,12 +118,22 @@ class Parser:
                 self.move_for_n(1)
                 return nodes
             else:
-                self.print_error(right_bracket, ['}'])
+                raise cmexception.SyntaxException(right_bracket, ['}'])
         elif token.word == 'if':
-            self.move_for_n(1)
-            if_node = self.parse_statement()
-            else_node = self.parse_else_statement()
-            return ast.IfElseNode(self.context, if_node, else_node)
+            left_brace = self.move_for_n(1)
+            if left_brace.word == '(':
+                self.move_for_n(1)
+                self.parse_expr()
+                right_brace = self.get_current_token()
+                if right_brace.word == ')':
+                    self.move_for_n(1)
+                    if_node = self.parse_statement()
+                    else_node = self.parse_else_statement()
+                    return ast.IfElseNode(self.context, if_node, else_node)
+                else:
+                    raise cmexception.SyntaxException(right_brace, [')'])
+            else:
+                raise cmexception.SyntaxException(left_brace, ['('])
         elif token.word == 'while':
             left_brace = self.lookup_for_n(1)
             if left_brace.word == '(':
@@ -132,9 +145,9 @@ class Parser:
                     stmtnode = self.parse_statement()
                     return ast.WhileNode(self.context, expr_node, stmtnode)
                 else:
-                    self.print_error(right_brace, ')')
+                    raise cmexception.SyntaxException(right_brace, [')'])
             else:
-                self.print_error(left_brace, '(')
+                raise cmexception.SyntaxException(left_brace, ['('])
         elif token.word == 'return':
             self.move_for_n(1)
             node = self.parse_expr_or_string()
@@ -142,7 +155,7 @@ class Parser:
                 self.move_for_n(1)
                 return ast.ReturnNode(self.context, node)
         else:
-            self.print_error(token, ['<legal identifier>', 'while', 'return', 'if', '<type'])
+            raise cmexception.SyntaxException(token, ['<legal identifier>', 'while', 'return', 'if', '<type>'])
 
     def parse_stmtlist(self):
         nodes = []
@@ -158,7 +171,7 @@ class Parser:
 
     def parse_else_statement(self):
         token = self.get_current_token()
-        if token == 'else':
+        if token.word == 'else':
             self.move_for_n(1)
             return ast.ElseNode(self.context, self.parse_statement())
         else:
@@ -171,33 +184,47 @@ class Parser:
             self.move_for_n(2)
             valuelist = self.parse_array_value_list()
             right_brace = self.get_current_token()
-            if right_brace == ')':
-                return ast.FunctionCallNode(self.context, token.word, valuelist)
+            if right_brace.word == ')':
+                semicolon = self.move_for_n(1)
+                if semicolon.word == ';':
+                    return ast.FunctionCallNode(self.context, token.word, valuelist)
+                else:
+                    raise cmexception.SyntaxException(semicolon, [';'])
             else:
-                self.print_error(right_brace, [')'])
+                raise cmexception.SyntaxException(right_brace, [')'])
         else:
-            self.print_error(left_brace, ['('])
+            raise cmexception.SyntaxException(left_brace, ['('])
 
     def parse_function(self):
-        temp = self.context
-        self.context = ASTContext(temp)
-        return ast.FunctionNode(self.context, self.parse_func_prototype(), self.parse_statement())
+        func_node = ast.FunctionNode(self.context, self.parse_func_prototype(), self.parse_statement())
+        self.context = self.context.parent_context
+        return func_node
 
     def parse_func_prototype(self):
         ret_type_token = self.get_current_token()
         if ret_type_token.is_type() or ret_type_token.word == 'void':
             func_name_token = self.lookup_for_n(1)
             if func_name_token.lexme_type == LexmeType.Variable:
-                self.move_for_n(3)
-                args = self.parse_paramlist()
-                right_bracket = self.get_current_token()
-                if right_bracket.word == ')':
-                    self.move_for_n(1)
-                    return ast.FuncPrototypeNode(self.context, func_name_token.word, ret_type_token.word, args)
+                if not func_name_token.word in self.context.type_table:
+                    self.move_for_n(3)
+                    args = self.parse_paramlist()
+                    right_bracket = self.get_current_token()
+                    if right_bracket.word == ')':
+                        self.move_for_n(1)
+                        self.context.type_table[func_name_token.word] = 'function'
+                        temp = self.context
+                        self.context = ASTContext(temp)
+                        for arg in args:
+                            self.context.type_table[arg[0]] = arg[1]
+                        return ast.FuncPrototypeNode(self.context, func_name_token.word, ret_type_token.word, args)
+                    else:
+                        raise cmexception.SyntaxException(right_bracket, ['<legal identifier>'])
                 else:
-                    self.print_error(right_bracket, ['<legal identifier>'])
+                    raise cmexception.RedefineException(func_name_token, "Function")
             else:
-                self.print_error(func_name_token, ['<legal identifier>'])
+                raise cmexception.SyntaxException(func_name_token, ['<legal identifier>'])
+        else:
+            raise cmexception.SyntaxException(ret_type_token, ['int', 'double', 'String', 'void', 'char'])
 
     def parse_paramlist(self):
         token = self.get_current_token()
@@ -205,12 +232,12 @@ class Parser:
         if token.is_type():
             var_token = self.lookup_for_n(1)
             if var_token.lexme_type == LexmeType.Variable:
-                nodes.append(var_token.word)
+                nodes.append((var_token.word, token.word))
                 self.move_for_n(2)
                 nodes.extend(self.parse_paramlistrest())
                 return nodes
             else:
-                self.print_error(var_token, ['<legal identifier>'])
+                raise cmexception.SyntaxException(var_token, ['<legal identifier>'])
         elif token.word == ')':
             return nodes
 
@@ -223,13 +250,13 @@ class Parser:
                 var_token = self.lookup_for_n(2)
                 if var_token.lexme_type == LexmeType.Variable:
                     self.move_for_n(3)
-                    nodes.append(var_token.word)
+                    nodes.append((var_token.word, type_token.word))
                     nodes.extend(self.parse_paramlistrest())
                     return nodes
                 else:
-                    self.print_error(var_token, ['<legal identifier>'])
+                    raise cmexception.SyntaxException(var_token, ['<legal identifier>'])
             else:
-                self.print_error(type_token, ['<argument type>'])
+                raise cmexception.SyntaxException(type_token, ['<argument type>'])
         elif token.word == ')':
             return nodes
 
@@ -237,12 +264,15 @@ class Parser:
         type_token = self.get_current_token()
         var_token = self.lookup_for_n(1)
         if var_token.lexme_type == LexmeType.Variable:
-            self.context.type_table[var_token.word] = type_token.word
-            node = ast.VarDeclNode(self.context, var_token.word, type_token.word)
-            self.move_for_n(3)
-            return node
+            if not var_token.word in self.context.type_table:
+                self.context.type_table[var_token.word] = type_token.word
+                node = ast.VarDeclNode(self.context, var_token.word, type_token.word)
+                self.move_for_n(3)
+                return node
+            else:
+                raise cmexception.RedefineException(var_token, "Variable")
         else:
-            self.print_error(var_token, ['<legal identifier>'])
+            raise cmexception.SyntaxException(var_token, ['<legal identifier>'])
 
     def parse_array_decl(self):
         type_token = self.get_current_token()
@@ -250,20 +280,23 @@ class Parser:
         length_token = self.lookup_for_n(3)
         if var_token.lexme_type == LexmeType.Variable:
             if length_token.lexme_type == LexmeType.Integer:
-                if self.lookup_for_n(4) == ']':
-                    if self.lookup_for_n(5) == ';':
-                        self.context.type_table[var_token.word] = type_token.word + '[]'
-                        node = ast.ArrayDeclNode(self.context, var_token, type_token.word, int(length_token.word))
-                        self.move_for_n(6)
-                        return node
+                if self.lookup_for_n(4).word == ']':
+                    if self.lookup_for_n(5).word == ';':
+                        if not var_token.word in self.context.type_table:
+                            self.context.type_table[var_token.word] = type_token.word + '[]'
+                            node = ast.ArrayDeclNode(self.context, var_token, type_token.word, int(length_token.word))
+                            self.move_for_n(6)
+                            return node
+                        else:
+                            raise cmexception.RedefineException(var_token, "Array")
                     else:
-                        self.print_error(self.lookup_for_n(5), [';'])
+                        raise cmexception.SyntaxException(self.lookup_for_n(5), [';'])
                 else:
-                    self.print_error(self.lookup_for_n(4), [']'])
+                    raise cmexception.SyntaxException(self.lookup_for_n(4), [']'])
             else:
-                self.print_error(length_token, ['<An Integer>'])
+                raise cmexception.SyntaxException(length_token, ['<an positive Integer>'])
         else:
-            self.print_error(var_token, ['<legal identifier>'])
+            raise cmexception.SyntaxException(var_token, ['<legal identifier>'])
 
     def parse_var_assign(self):
         var_token = self.get_current_token()
@@ -280,9 +313,9 @@ class Parser:
                 self.move_for_n(1)
                 return node
             else:
-                self.print_error(semicolon, [';'])
+                raise cmexception.SyntaxException(semicolon, [';'])
         else:
-            self.print_error(assign, ['='])
+            raise cmexception.SyntaxException(assign, ['='])
 
     def parse_array_assign(self):
         var_token = self.get_current_token()
@@ -293,7 +326,7 @@ class Parser:
         if left_bracket.word == '[':
             index_expr_node = self.parse_expr()
             right_bracket = self.get_current_token()
-            if right_bracket == ']':
+            if right_bracket.word == ']':
                 equal = self.lookup_for_n(1)
                 if equal.word == '=':
                     self.move_for_n(2)
@@ -303,44 +336,56 @@ class Parser:
                     if semicolon.word == ';':
                         return node
                     else:
-                        self.print_error(semicolon, [';'])
+                        raise cmexception.SyntaxException(semicolon, [';'])
                 else:
-                    self.print_error(equal, ['='])
+                    raise cmexception.SyntaxException(equal, ['='])
             else:
-                self.print_error(right_bracket, [']'])
+                raise cmexception.SyntaxException(right_bracket, [']'])
         else:
-            self.print_error(left_bracket, ['['])
+            raise cmexception.SyntaxException(left_bracket, ['['])
 
     def parse_var_decl_and_assign(self):
         token = self.get_current_token()
         var_token = self.lookup_for_n(1)
         if var_token.lexme_type == LexmeType.Variable:
-            self.move_for_n(3)
-            expr_node = self.parse_expr_or_string()
-            self.move_for_n(1)
-            return ast.VarDeclAndAssignNode(self.context, var_token.word, token.word, expr_node)
+            if not var_token.word in self.context.type_table:
+                self.move_for_n(3)
+                expr_node = self.parse_expr_or_string()
+                semicolon = self.get_current_token()
+                if semicolon.word == ';':
+                    self.move_for_n(1)
+                    self.context.type_table[var_token.word] = token.word
+                    return ast.VarDeclAndAssignNode(self.context, var_token.word, token.word, expr_node)
+                else:
+                    raise cmexception.SyntaxException(semicolon, [';'])
+            else:
+                raise cmexception.RedefineException(var_token, "Variable")
         else:
-            self.print_error(self.lookup_for_n(4), ['<legal identifier>'])
+            raise cmexception.SyntaxException(self.lookup_for_n(4), ['<legal identifier>'])
 
     def parse_array_decl_and_assign(self):
         token = self.get_current_token()
         var_token = self.lookup_for_n(1)
         if var_token.lexme_type == LexmeType.Variable:
-            length_token = self.lookup_for_n(3)
-            if length_token.lexme_type == LexmeType.Integer:
-                length = int(length_token.word)
-                self.move_for_n(6)
-                initial_value = self.parse_array_initial_value()
-                semicolon = self.get_current_token()
-                if semicolon == ';':
-                    self.move_for_n(1)
-                    return ast.ArrayDeclAndAssignNode(self.context, var_token.word, token.word, length, initial_value)
+            if not var_token.word in self.context.type_table:
+                length_token = self.lookup_for_n(3)
+                if length_token.lexme_type == LexmeType.Integer:
+                    length = int(length_token.word)
+                    self.move_for_n(6)
+                    initial_value = self.parse_array_initial_value()
+                    semicolon = self.get_current_token()
+                    if semicolon.word == ';':
+                        self.move_for_n(1)
+                        return ast.ArrayDeclAndAssignNode(self.context, var_token.word, token.word, length,
+                                                          initial_value)
+                    else:
+                        raise cmexception.SyntaxException(self.lookup_for_n(4), [';'])
                 else:
-                    self.print_error(self.lookup_for_n(4), [';'])
+                    raise cmexception.SyntaxException(self.lookup_for_n(4), ['<positive integer>'])
             else:
-                self.print_error(self.lookup_for_n(4), ['<positive integer>'])
+                raise cmexception.RedefineException(var_token, "Variable")
         else:
-            self.print_error(self.lookup_for_n(4), ['<legal identifier>'])
+            raise cmexception.SyntaxException(self.lookup_for_n(4), ['<legal identifier>'])
 
     def parse_array_initial_value(self):
         token = self.get_current_token()
@@ -348,17 +393,17 @@ class Parser:
             self.move_for_n(1)
             valuelist = self.parse_array_value_list()
             token = self.get_current_token()
-            if token == '}':
+            if token.word == '}':
                 return valuelist
             else:
-                self.print_error(self.lookup_for_n(4), ['}'])
+                raise cmexception.SyntaxException(self.lookup_for_n(4), ['}'])
         else:
-            self.print_error(self.lookup_for_n(4), ['{'])
+            raise cmexception.SyntaxException(self.lookup_for_n(4), ['{'])
 
     def parse_array_value_list(self):
         valuelist = []
         token = self.get_current_token()
-        if token == '}':
+        if token.word == '}':
             return
         else:
             valuelist.append(self.parse_expr_or_string())
@@ -371,7 +416,9 @@ class Parser:
         if token.word == ',':
             self.move_for_n(1)
             valuelist.append(self.parse_expr_or_string())
-            valuelist.extend(self.parse_comma_expr_list())
+            rest = self.parse_comma_expr_list()
+            if rest is not None:
+                valuelist.extend(rest)
             return valuelist
         elif token.word == '}':
             return valuelist
@@ -596,14 +643,23 @@ class Parser:
     def parse_atom(self):
         token = self.get_current_token()
         if token.lexme_type == LexmeType.Variable:
-            if self.lookup_for_n(1) == '[':
+            if self.lookup_for_n(1).word == '[':
                 self.move_for_n(2)
                 index_expr_node = self.parse_expr()
                 right_bracket = self.get_current_token()
-                if right_bracket == ']':
+                if right_bracket.word == ']':
                     return ast.ArrayVariableNode(self.context, token.word, index_expr_node)
                 else:
-                    self.print_error(right_bracket, [']'])
+                    raise cmexception.SyntaxException(right_bracket, [']'])
+            elif self.lookup_for_n(1).word == '(':
+                self.move_for_n(2)
+                valuelist = self.parse_array_value_list()
+                right_brace = self.get_current_token()
+                if right_brace.word == ')':
+                    self.move_for_n(1)
+                    return ast.FunctionCallNode(self.context, token.word, valuelist)
+                else:
+                    raise cmexception.SyntaxException(right_brace, [')'])
             else:
                 self.move_for_n(1)
                 return ast.VariableNode(self.context, token.word)
@@ -615,7 +671,7 @@ class Parser:
                 self.move_for_n(1)
                 return expr_node
             else:
-                self.print_error(right_brace, [')'])
+                raise cmexception.SyntaxException(right_brace, [')'])
         elif token.lexme_type == LexmeType.Double:
             self.move_for_n(1)
             return ast.ConstantNode(self.context, float(token.word))
@@ -626,12 +682,7 @@ class Parser:
             self.move_for_n(1)
             return ast.ConstantNode(self.context, token.word)
         else:
-            self.print_error(token, ['<legal identifier>', '(', '<legal number>', '<ascii character>'])
-
-    @staticmethod
-    def print_error(lexme, expected):
-        print "syntax error at line %d column %d, expected " % (lexme.line_num, lexme.column_num), expected
-        exit(1)
+            raise cmexception.SyntaxException(token, ['<legal identifier>', '(', '<legal number>', '<ascii character>'])
 
 
 class ASTContext:

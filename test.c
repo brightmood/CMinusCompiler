@@ -1,10 +1,13 @@
-int main()
-{
-    int a = 1;
-    double b = 1;
-    int c = a + b;
-    while(a > b){
-        a = a - 1;
-    }
-    return c;
+int a = 10;
+
+int max(int a, int b){
+    if(a > b)
+        return a;
+    else
+        return b;
+}
+
+void main(){
+    int b = 5;
+    int c = max(a, b);
 }

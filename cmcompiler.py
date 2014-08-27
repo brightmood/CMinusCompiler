@@ -3,6 +3,7 @@
 import sys
 from lexer import Lexer
 from parser import Parser
+from cmexception import CMException
 
 if __name__ == '__main__':
     if len(sys.argv) >= 2:
@@ -20,6 +21,8 @@ if __name__ == '__main__':
                 ast_tree.print_ast()
             except IOError, e:
                 print "Can not find source file"
+            except CMException, cme:
+                print cme.to_string()
     else:
         print "No source file is specified"
 
