@@ -20,14 +20,16 @@ letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
 
 digits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
 
-single_operators = ['>', '<', '+', '*', '/', '%', '!', '&', '|']
+single_operators = ['>', '<', '+', '-', '*', '/', '%', '!', '&', '|']
 
 terminate_operators = [',', ';', '[', ']', '(', ')', '{', '}']
 
 double_operator = ['>=', '<=', '==', '&&', '||', '<<', '>>', '!=']
 
 
-# 对于DFA状态转换表来说，有很多可以压缩的地方，把字母压缩成letters，数字压缩成digits等等
+# compressed DFA state transform Table
+# 'digits' did not contains 0
+# 'letters' contains '_'
 def generate_equal_type():
     equal_type_table = {}
     for i in letters:
@@ -47,55 +49,48 @@ EqualTypeTable = generate_equal_type()
 
 def build_transform_table():
     table = {}
-    state_num = 18
+    state_num = 17
     for i in range(0, state_num):
         table[i] = {}
     table[1]['letters'] = 2
-    table[1]['single_operators'] = 4
-    table[1]['-'] = 3
-    table[1]['digits'] = 8
-    table[1]['0'] = 7
-    table[1]['"'] = 11
-    table[1]["'"] = 14
-    table[1]['terminate_operators'] = 6
-    table[1]['='] = 17
+    table[1]['single_operators'] = 3
+    table[1]['digits'] = 7
+    table[1]['0'] = 6
+    table[1]['"'] = 10
+    table[1]["'"] = 13
+    table[1]['terminate_operators'] = 5
+    table[1]['='] = 16
 
     table[2]['letters'] = 2
     table[2]['digits'] = 2
     table[2]['0'] = 2
 
-    table[3]['-'] = 5
-    table[3]['0'] = 7
-    table[3]['digits'] = 8
-    table[3]['='] = 5
+    table[3]['single_operators'] = 4
+    table[3]['='] = 4
 
-    table[4]['-'] = 5
-    table[4]['single_operators'] = 5
-    table[4]['='] = 5
+    table[6]['.'] = 8
 
-    table[7]['.'] = 9
+    table[7]['digits'] = 7
+    table[7]['0'] = 7
+    table[7]['.'] = 8
 
-    table[8]['digits'] = 8
-    table[8]['0'] = 8
-    table[8]['.'] = 9
+    table[8]['digits'] = 9
+    table[8]['0'] = 9
 
-    table[9]['digits'] = 10
-    table[9]['0'] = 10
+    table[9]['digits'] = 9
+    table[9]['0'] = 9
 
-    table[10]['digits'] = 10
-    table[10]['0'] = 10
+    table[10]['any'] = 11
+    table[10]['"'] = 12
 
-    table[11]['any'] = 12
-    table[11]['"'] = 13
+    table[11]['any'] = 11
+    table[11]['"'] = 12
 
-    table[12]['any'] = 12
-    table[12]['"'] = 13
+    table[13]["any"] = 14
 
-    table[14]["any"] = 15
+    table[14]["'"] = 15
 
-    table[15]["'"] = 16
-
-    table[17]['='] = 5
+    table[16]['='] = 4
     return table
 
 
@@ -105,13 +100,12 @@ AcceptedState = {
     3: LexmeType.Operator,
     4: LexmeType.Operator,
     5: LexmeType.Operator,
-    6: LexmeType.Operator,
+    6: LexmeType.Integer,
     7: LexmeType.Integer,
-    8: LexmeType.Integer,
-    10: LexmeType.Double,
-    13: LexmeType.String,
-    16: LexmeType.Char,
-    17: LexmeType.Operator
+    9: LexmeType.Double,
+    12: LexmeType.String,
+    15: LexmeType.Char,
+    16: LexmeType.Operator
 }
 
 

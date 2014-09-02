@@ -18,7 +18,8 @@ if __name__ == '__main__':
                 parser = Parser(lexer)
                 ast_tree = parser.process()
                 f.close()
-                ast_tree.print_ast()
+                module = ast_tree.code_gen()
+                print module
             except IOError, e:
                 print "Can not find source file"
             except CMException, cme:
