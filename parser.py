@@ -120,7 +120,9 @@ class Parser:
             elif lookup1.word == '=':
                 return self.parse_var_assign()
             elif lookup1.word == '(':
-                return self.parse_function_call()
+                node = self.parse_function_call()
+                self.move_for_n(1)
+                return node
             else:
                 raise cmexception.SyntaxException(lookup1, ['=', '['])
         elif token.word == '{':
@@ -140,7 +142,7 @@ class Parser:
                 right_brace = self.get_current_token()
                 if right_brace.word == ')':
                     self.move_for_n(1)
-                    if_node = self.parse_statement()
+                    if_node = ast.IfNode(self.context, self.parse_statement())
                     else_node = self.parse_else_statement()
                     return ast.IfElseNode(self.context, condition_expr, if_node, else_node)
                 else:
@@ -162,11 +164,17 @@ class Parser:
             else:
                 raise cmexception.SyntaxException(left_brace, ['('])
         elif token.word == 'return':
-            self.move_for_n(1)
-            node = self.parse_expr_or_string()
-            if self.get_current_token().word == ';':
+            s = self.move_for_n(1)
+            if s.word == ';':
                 self.move_for_n(1)
-                return ast.ReturnNode(self.context, node)
+                return ast.ReturnNode(self.context, token, None)
+            else:
+                node = self.parse_expr_or_string()
+                if self.get_current_token().word == ';':
+                    self.move_for_n(1)
+                    return ast.ReturnNode(self.context, token, node)
+                else:
+                    return cmexception.SyntaxException(self.get_current_token(), [';'])
         else:
             raise cmexception.SyntaxException(token, ['<legal identifier>', 'while', 'return', 'if', '<type>'])
 
@@ -392,9 +400,9 @@ class Parser:
                 self.move_for_n(1)
                 return valuelist
             else:
-                raise cmexception.SyntaxException(self.lookup_for_n(4), ['}'])
+                raise cmexception.SyntaxException(token, ['}'])
         else:
-            raise cmexception.SyntaxException(self.lookup_for_n(4), ['{'])
+            raise cmexception.SyntaxException(token, ['{'])
 
     def parse_array_value_list(self):
         valuelist = []
@@ -647,6 +655,7 @@ class Parser:
                 index_expr_node = self.parse_expr()
                 right_bracket = self.get_current_token()
                 if right_bracket.word == ']':
+                    self.move_for_n(1)
                     return ast.ArrayVariableNode(self.context, token, index_expr_node)
                 else:
                     raise cmexception.SyntaxException(right_bracket, [']'])
@@ -663,14 +672,22 @@ class Parser:
                 self.move_for_n(1)
                 return ast.VariableNode(self.context, token)
         elif token.word == '(':
-            self.move_for_n(1)
-            expr_node = self.parse_expr()
-            right_brace = self.get_current_token()
-            if right_brace.word == ')':
-                self.move_for_n(1)
-                return expr_node
+            lookup1 = self.lookup_for_n(1)
+            if lookup1.is_type():
+                lookup2 = self.lookup_for_n(2)
+                if lookup2.word == ')':
+                    self.move_for_n(3)
+                    expr_node = self.parse_expr()
+                    return ast.CastExprNode(self.context, expr_node, lookup1)
             else:
-                raise cmexception.SyntaxException(right_brace, [')'])
+                self.move_for_n(1)
+                expr_node = self.parse_expr()
+                right_brace = self.get_current_token()
+                if right_brace.word == ')':
+                    self.move_for_n(1)
+                    return expr_node
+                else:
+                    raise cmexception.SyntaxException(right_brace, [')'])
         elif token.lexme_type == LexmeType.Double:
             self.move_for_n(1)
             return ast.ConstantNode(self.context, token)
