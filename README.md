@@ -34,5 +34,5 @@ try to put them in version 1.5.
 
 Progress
 =========
-    I am working on add built-in functions and while-loop, after which I will publish it as version 1.0.
+    I am working on adding built-in functions and while-loop, after which I will publish it as version 1.0.
 
