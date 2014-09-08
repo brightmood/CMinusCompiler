@@ -92,6 +92,9 @@ class Parser:
                 return self.parse_var_decl_and_assign()
             else:
                 raise cmexception.SyntaxException(look_forward_2, [';', '[', '='])
+        elif token.word == 'extern':
+            self.move_for_n(1)
+            return self.parse_func_prototype()
         else:
             raise cmexception.SyntaxException(token, ['int', 'double', 'String', 'char'])
 
@@ -329,8 +332,6 @@ class Parser:
     def parse_array_assign(self):
         var_token = self.get_current_token()
 
-        # self.current_node.children.append(node)
-        # self.current_node = node
         left_bracket = self.lookup_for_n(1)
         if left_bracket.word == '[':
             self.move_for_n(2)

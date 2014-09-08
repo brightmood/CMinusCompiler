@@ -10,7 +10,7 @@ LexmeType = enum(Variable=1, Integer=2, Double=3, String=4,
                  Char=5, Operator=6, Reserve=7)
 
 ReserveWord = ('char', 'int', 'double', 'void', 'if', 'else',
-               'for', 'do', 'while', 'break', 'return', 'String')
+               'for', 'do', 'while', 'break', 'return', 'String', 'extern')
 
 letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
            'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'
@@ -136,11 +136,12 @@ class Lexer:
             self.line = self.source.readline()
             self.line_num += 1
             self.column_num = 0
-            if self.line == '\n':
-                return self.get_next_token()
-            elif self.line == '':
+            if self.line == '':
                 print "OK"
                 return None
+            elif self.line.strip(' \t\r\n') == '':
+                self.line = ''
+                return self.get_next_token()
         return self.dfa()
 
     def dfa(self):

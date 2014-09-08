@@ -94,22 +94,36 @@ class InvalidOperandException(CMException):
 
 class FunctionReturnTypeNotMatchedException(CMException):
 
-    def __init__(self, func_name_token, return_token, expected_return_type, actual_return_type):
+    def __init__(self, func_name_token, expected_return_type, actual_return_type):
         CMException.__init__(self, func_name_token)
-        self.return_token = return_token
         self.expected_return_type = expected_return_type
         self.actual_return_type = actual_return_type
 
     def to_string(self):
-        if self.return_token is not None:
-            return "Return type of function '%s' not matched at line: %d column: %d. " \
-                   "Expected %s but return %s" \
-                   % (self.token.word, self.return_token.line_num, self.return_token.column_num,
-                      self.expected_return_type, self.actual_return_type)
-        else:
-            return "Return type of function '%s' not matched. Expected %s but return %s" \
-                   % (self.token.word, self.expected_return_type, self.actual_return_type)
+        return "Return type of function '%s' not matched. Expected %s but return %s.\n" \
+               "Notice: each branch should have a return statement if the return type" \
+               "is not 'void'" % (self.token.word, self.expected_return_type, self.actual_return_type)
 
-#1 means that function doesn't exist
-#2 means that arguments number doesn't match
-#3 means that arguments type doesn't match
+
+#errno = 1 means that function doesn't exist
+#errno = 2 means that arguments number doesn't match
+#errno = 3 means that arguments type doesn't match
+class FunctionArgumentsNotMatchedException(CMException):
+
+    def __init__(self, func_name_token, expected_arg_list, actual_arg_list, errno):
+        CMException.__init__(self, func_name_token)
+        self.expected_arg_list = expected_arg_list
+        self.actual_arg_list = actual_arg_list
+        self.errno = errno
+
+
+class GlobalStatementAssignException(CMException):
+
+    def __init__(self, var_name_token):
+        CMException.__init__(self, var_name_token)
+
+    def to_string(self):
+
+        return "Syntax error at line %d column %d, " \
+               "Right value of global statement should be " \
+               % (self.token.line_num, self.token.column_num, self.token.word)

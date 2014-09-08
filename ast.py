@@ -1,6 +1,8 @@
 from llvm.core import Module, Constant, Type, Function, Builder, GlobalVariable, ConstantArray
 from llvm.core import IPRED_EQ, IPRED_NE, IPRED_SGT, IPRED_SGE, IPRED_SLT, IPRED_SLE
 from llvm.core import RPRED_UEQ, RPRED_UGT, RPRED_UGE, RPRED_ULT, RPRED_ULE, RPRED_UNE
+from llvm.ee import ExecutionEngine, TargetData
+from llvm.passes import FunctionPassManager
 import cmexception
 from lexer import LexmeType
 
@@ -8,6 +10,9 @@ g_llvm_module = Module.new('CMCompiler')
 g_llvm_builder = None
 func_table = {}
 constant_string_num = 0
+g_llvm_pass_manager = FunctionPassManager.new(g_llvm_module)
+g_llvm_executor = ExecutionEngine.new(g_llvm_module)
+g_llvm_pass_manager.initialize()
 
 
 #Base class of each Abstract Syntax Tree Node
@@ -67,9 +72,9 @@ class VarDeclNode(ASTNode):
         else:
             if not self.var_name_token.word in self.context.type_table:
                 t = Helper.get_type(self.typo.word)
-                var_addr = g_llvm_builder.alloca(t)
+                var_address = g_llvm_builder.alloca(t, name=self.var_name_token.word)
                 self.context.type_table[self.var_name_token.word] = t
-                self.context.value_table[self.var_name_token.word] = var_addr
+                self.context.value_table[self.var_name_token.word] = var_address
             else:
                 raise cmexception.RedefineException(self.var_name_token)
 
@@ -100,7 +105,7 @@ class ArrayDeclNode(ASTNode):
         else:
             if not self.array_name_token.word in self.context.type_table:
                 t = Helper.get_array_type(self.typo.word, length)
-                var_addr = g_llvm_builder.alloca(t)
+                var_addr = g_llvm_builder.alloca(t, name=self.array_name_token.word)
                 self.context.type_table[self.array_name_token.word] = t
                 self.context.value_table[self.array_name_token.word] = var_addr
             else:
@@ -199,7 +204,7 @@ class VarDeclAndAssignNode(ASTNode):
         else:
             if not self.var_name_token.word in self.context.type_table:
                 t = Helper.get_type(self.typo.word)
-                var_address = g_llvm_builder.alloca(t)
+                var_address = g_llvm_builder.alloca(t, name=self.var_name_token.word)
                 self.context.type_table[self.var_name_token.word] = t
                 self.context.value_table[self.var_name_token.word] = var_address
                 expr = self.expr_node.code_gen()
@@ -240,7 +245,7 @@ class ArrayDeclAndAssignNode(ASTNode):
                 raise cmexception.RedefineException(self.array_name_token)
             else:
                 t = Helper.get_array_type(self.typo.word, int(self.length.word))
-                array_address = g_llvm_builder.alloca(t)
+                array_address = g_llvm_builder.alloca(t, name=self.array_name_token.word)
                 inx = 0
                 for i in self.initial_value:
                     value = i.code_gen()
@@ -270,7 +275,6 @@ class BinaryExprNode(ASTNode):
 
         d = Type.double()
         i32 = Type.int(32)
-        i8 = Type.int(8)
         i1 = Type.int(1)
 
         op = self.operator.word
@@ -278,54 +282,40 @@ class BinaryExprNode(ASTNode):
         right = self.right.code_gen()
 
         if op == '||' or op == '&&':
+            if left.type != right.type:
+                if left.type == d or right.type == d:
+                    left = Helper.auto_cast(g_llvm_builder, left, d)
+                    right = Helper.auto_cast(g_llvm_builder, right, d)
+                else:
+                    left = Helper.auto_cast(g_llvm_builder, left, i32)
+                    right = Helper.auto_cast(g_llvm_builder, right, i32)
             if left.type == d:
-                bool_left = Constant.real(left.type, '0').fcmp(RPRED_UEQ, left)
-            else:
-                bool_left = Constant.int(left.type, '0').fcmp(IPRED_EQ, left)
-            if right.type == d:
-                bool_right = Constant.real(left.type, '0').fcmp(RPRED_UEQ, right)
-            else:
-                bool_right = Constant.int(left.type, '0').fcmp(IPRED_EQ, right)
-            if op == '||':
-                if bool_left == bool_right == Constant.int(i1, 0):
-                    return bool_right
+                if g_llvm_builder is None:
+                    return left.fcmp(RPRED_UEQ, right)
                 else:
-                    return Constant.int(i1, 1)
-            elif op == '&&':
-                if bool_left == bool_right == Constant.int(i1, 1):
-                    return bool_right
+                    return g_llvm_builder.fcmp(RPRED_UEQ, left, right)
+            else:
+                if g_llvm_builder is None:
+                    return left.icmp(IPRED_EQ, right)
                 else:
-                    return Constant.int(i1, 0)
+                    return g_llvm_builder.icmp(IPRED_EQ, left, right)
+
         method = Helper.choose_method(left, op, right)
-        # if g_llvm_builder:
+
         if method[0] == 'f':
-            if left.type != d:
-                left = left.sitofp(d)
-            if right.type != d:
-                right = right.sitofp(d)
+            left = Helper.auto_cast(g_llvm_builder, left, d)
+            right = Helper.auto_cast(g_llvm_builder, right, d)
         elif method == 'and_' or method == 'or_':
             if left.type == d or right.type == d:
                 raise cmexception.InvalidOperandException(self.operator, str(left.type), str(right.type))
             else:
                 if left.type != right.type:
-                    if left.type == i1:
-                        left = left.zext(Type.int(32))
-                    elif left.type != i32:
-                        left = left.sext(Type.int(32))
-                    if right.type == i1:
-                        right = right.zext(Type.int(32))
-                    elif right.type != i32:
-                        right = right.sext(Type.int(32))
+                    left = Helper.auto_cast(g_llvm_builder, left, i32)
+                    right = Helper.auto_cast(g_llvm_builder, right, i32)
         else:
             if left.type != right.type:
-                if left.type == i1:
-                    left = left.zext(Type.int(32))
-                elif left.type != i32:
-                    left = left.sext(Type.int(32))
-                if right.type == i1:
-                    right = right.zext(Type.int(32))
-                elif right.type != i32:
-                    right = right.sext(Type.int(32))
+                left = Helper.auto_cast(g_llvm_builder, left, i32)
+                right = Helper.auto_cast(g_llvm_builder, right, i32)
         if op == '<' or op == '>' or op == '<=' or op == '>=' or op == '==' or op == '!=':
             flag = Helper.choose_flag(op, left)
             if g_llvm_builder is None:
@@ -391,7 +381,6 @@ class FuncPrototypeNode(ASTNode):
         arg_types = [Helper.get_type(arg[1]) for arg in self.args if True]
         func_type = Type.function(return_type, arg_types, False)
         if not func_name_with_tag in top_context.type_table:
-
             function = Function.new(g_llvm_module, func_type, self.func_name_token.word)
             top_context.type_table[func_name_with_tag] = func_type
             for arg in self.args:
@@ -401,7 +390,9 @@ class FuncPrototypeNode(ASTNode):
             old_func_type = top_context.type_table[func_name_with_tag]
             if old_func_type == func_type:
                 if from_definition:
-                    return g_llvm_module.get_function_named(self.func_name_token.word)
+                    for arg in self.args:
+                        self.context.type_table[arg[0]] = Helper.get_type(arg[1])
+                    return [g_llvm_module.get_function_named(self.func_name_token.word), self.context]
                 else:
                     raise cmexception.RedefineException(self.func_name_token, 'function')
             else:
@@ -426,44 +417,25 @@ class FunctionNode(ASTNode):
         for arg in self.prototype.args:
             t = context.type_table[arg[0]]
             context.value_table[arg[0]] = g_llvm_builder.alloca(t)
-        return_value = None
-        return_token = None
         if self.body:
             for stmt in self.body:
-                return_value = stmt.code_gen()
-                if return_value is not None:
-                    return_token = stmt.return_token
-                    break
+                stmt.code_gen()
         key = self.prototype.func_name_token.word + '()'
         expected_return_type = self.context.type_table[key].return_type
-
-        if return_value is not None and return_value == Type.void():
-            if expected_return_type == Type.void():
-                g_llvm_builder.ret_void()
-            else:
-                raise cmexception.FunctionReturnTypeNotMatchedException(
-                    self.prototype.func_name_token, return_token,
-                    Helper.get_type_string(expected_return_type), return_value)
-        elif return_value is not None:
-            if expected_return_type == return_value.type:
-                g_llvm_builder.ret(return_value)
-            else:
-                raise cmexception.FunctionReturnTypeNotMatchedException(
-                    self.prototype.func_name_token, return_token,
-                    Helper.get_type_string(expected_return_type), return_value.type)
+        void_type = Type.void()
+        if expected_return_type == void_type:
+            g_llvm_builder.ret_void()
         else:
-            if expected_return_type == Type.void():
-                g_llvm_builder.ret_void()
+            if str(expected_return_type) == 'double':
+                g_llvm_builder.ret(Constant.real(expected_return_type, 0))
             else:
-                raise cmexception.FunctionReturnTypeNotMatchedException(
-                    self.prototype.func_name_token, None,
-                    Helper.get_type_string(expected_return_type), Type.void())
-
+                g_llvm_builder.ret(Constant.int(expected_return_type, 0))
         # Validate the generated code, checking for consistency.
         try:
             function_prototype.verify()
+            g_llvm_pass_manager.run(function_prototype)
         except:
-            function_prototype.delete()
+            print function_prototype.delete()
 
 
 class IfElseNode(ASTNode):
@@ -477,13 +449,26 @@ class IfElseNode(ASTNode):
         condition = self.condition.code_gen()
 
         if str(condition.type) == 'double':
-            value = condition.fcmp(RPRED_UNE, Constant.real(condition.type, 0))
+            condition_value = g_llvm_builder.fcmp(RPRED_UNE, condition, Constant.real(condition.type, 0))
         else:
-            value = condition.icmp(IPRED_NE, Constant.int(condition.type, 0))
-        if value.z_ext_value == 1:
-            self.if_node.code_gen()
-        else:
+            condition_value = g_llvm_builder.icmp(IPRED_NE, condition, Constant.int(condition.type, 0))
+
+        function = g_llvm_builder.basic_block.function
+        if_block = function.append_basic_block('if')
+        else_block = function.append_basic_block('else')
+        merge_block = function.append_basic_block('merge')
+        g_llvm_builder.cbranch(condition_value, if_block, else_block)
+
+        g_llvm_builder.position_at_end(if_block)
+        self.if_node.code_gen()
+        g_llvm_builder.branch(merge_block)
+
+        g_llvm_builder.position_at_end(else_block)
+        if self.else_node is not None:
             self.else_node.code_gen()
+        g_llvm_builder.branch(merge_block)
+
+        g_llvm_builder.position_at_end(merge_block)
 
 
 class IfNode(ASTNode):
@@ -493,8 +478,11 @@ class IfNode(ASTNode):
 
     def code_gen(self):
         if self.stmts:
-            for stmt in self.stmts:
-                stmt.code_gen()
+            if isinstance(self.stmts, list):
+                for stmt in self.stmts:
+                    stmt.code_gen()
+            else:
+                return self.stmts.code_gen()
 
 
 class ElseNode(ASTNode):
@@ -504,18 +492,46 @@ class ElseNode(ASTNode):
 
     def code_gen(self):
         if self.stmts:
-            for stmt in self.stmts:
-                stmt.code_gen()
+            if isinstance(self.stmts, list):
+                for stmt in self.stmts:
+                    stmt.code_gen()
+            else:
+                return self.stmts.code_gen()
 
 
 class WhileNode(ASTNode):
     def __init__(self, context, expr, statements_node):
         ASTNode.__init__(self, context)
         self.expr = expr
-        self.statements_node = statements_node
+        if not isinstance(statements_node, list):
+            self.stmts = [statements_node]
+        else:
+            self.stmts = statements_node
 
     def code_gen(self):
-        pass
+        condition = self.expr.code_gen()
+        if str(condition.type) == 'double':
+            condition_value = g_llvm_builder.fcmp(RPRED_UNE, condition, Constant.real(condition.type, 0))
+        else:
+            condition_value = g_llvm_builder.icmp(IPRED_NE, condition, Constant.int(condition.type, 0))
+        function = g_llvm_builder.basic_block.function
+        #pre_header_block = g_llvm_builder.basic_block
+        loop_block = function.append_basic_block('while')
+        afterloop_block = function.append_basic_block('afterwhile')
+
+        g_llvm_builder.cbranch(condition_value, loop_block, afterloop_block)
+        g_llvm_builder.position_at_end(loop_block)
+
+        for stmt in self.stmts:
+            stmt.code_gen()
+
+        condition = self.expr.code_gen()
+        if str(condition.type) == 'double':
+            condition_value = g_llvm_builder.fcmp(RPRED_UNE, condition, Constant.real(condition.type, 0))
+        else:
+            condition_value = g_llvm_builder.icmp(IPRED_NE, condition, Constant.int(condition.type, 0))
+        g_llvm_builder.cbranch(condition_value, loop_block, afterloop_block)
+        g_llvm_builder.position_at_end(afterloop_block)
 
 
 class ReturnNode(ASTNode):
@@ -526,9 +542,13 @@ class ReturnNode(ASTNode):
 
     def code_gen(self):
         if self.expr_or_string_node is not None:
-            return self.expr_or_string_node.code_gen()
+            value = self.expr_or_string_node.code_gen()
+            g_llvm_builder.ret(value)
         else:
-            return Type.void()
+            g_llvm_builder.ret_void()
+        function = g_llvm_builder.basic_block.function
+        afterreturn_block = function.append_basic_block('afterreturn')
+        g_llvm_builder.position_at_end(afterreturn_block)
 
 
 class ConstantNode(ASTNode):
@@ -565,8 +585,11 @@ class VariableNode(ASTNode):
             if str(t) == 'i8*':
                 return self.context.value_table[self.var_name_token.word]
             else:
-                return g_llvm_builder.load(
-                    self.context.value_table[self.var_name_token.word])
+                if g_llvm_builder is not None:
+                    return g_llvm_builder.load(
+                        self.context.value_table[self.var_name_token.word])
+                else:
+                    raise cmexception.GlobalStatementAssignException(self.var_name_token)
         else:
             if self.context.parent_context is not None:
                 if self.var_name_token.word in self.context.parent_context.type_table:
@@ -592,9 +615,12 @@ class ArrayVariableNode(ASTNode):
         if self.array_name_token.word in self.context.type_table:
             t = self.context.type_table[self.array_name_token.word]
             array_address = self.context.value_table[self.array_name_token.word]
-            element_address = g_llvm_builder.gep(array_address,
+            if g_llvm_builder is not None:
+                element_address = g_llvm_builder.gep(array_address,
                                [Constant.int(Type.int(32), 0), self.index_expr_node.code_gen()])
-            return g_llvm_builder.load(element_address)
+                return g_llvm_builder.load(element_address)
+            else:
+                raise cmexception.GlobalStatementAssignException(self.array_name_token)
         else:
             if self.context.parent_context is not None:
                 if self.array_name_token.word in self.context.parent_context.type_table:
@@ -621,6 +647,12 @@ class FunctionCallNode(ASTNode):
         if len(callee.args) != len(self.args):
             raise RuntimeError('Incorrect number of arguments passed.')
         return g_llvm_builder.call(callee, [arg.code_gen() for arg in self.args], 'calltmp')
+
+
+class VoidValue:
+    def __init__(self, value):
+        self.type = Type.void()
+        self.value = value
 
 
 class Helper:
@@ -683,42 +715,42 @@ class Helper:
             i1 = Type.int(1)
             if target_type == d:
                 if value.type != d:
-                    # if builder:
-                    #     value = builder.sitofp(value, d)
-                    # else:
-                    value = value.sitofp(d)
+                    if builder:
+                        value = builder.sitofp(value, d)
+                    else:
+                        value = value.sitofp(d)
             elif target_type == i32:
                 if value.type == d:
-                    # if builder:
-                    #     value = builder.fptosi(value, i32)
-                    # else:
-                    value = value.fptosi(i32)
+                    if builder:
+                        value = builder.fptosi(value, i32)
+                    else:
+                        value = value.fptosi(i32)
                 elif value.type == i1:
-                    # if builder:
-                    #     value = builder.zext(value, i32)
-                    # else:
-                    value = value.zext(i32)
+                    if builder:
+                        value = builder.zext(value, i32)
+                    else:
+                        value = value.zext(i32)
                 else:
-                    # if builder:
-                    #     value = builder.sext(value, i32)
-                    # else:
-                    value = value.sext(i32)
+                    if builder:
+                        value = builder.sext(value, i32)
+                    else:
+                        value = value.sext(i32)
             elif target_type == i8:
                 if value.type == d:
-                    # if builder:
-                    #     value = builder.fptrunc(value, i8)
-                    # else:
-                    value = value.fptrunc(i8)
+                    if builder:
+                        value = builder.fptrunc(value, i8)
+                    else:
+                        value = value.fptrunc(i8)
                 elif value.type == i32:
-                    # if builder:
-                    #     value = builder.trunc(value, i8)
-                    # else:
-                    value = value.trunc(i8)
+                    if builder:
+                        value = builder.trunc(value, i8)
+                    else:
+                        value = value.trunc(i8)
                 elif value.type == i1:
-                    # if builder:
-                    #     value = builder.zext(value, i8)
-                    # else:
-                    value = value.zext(i8)
+                    if builder:
+                        value = builder.zext(value, i8)
+                    else:
+                        value = value.zext(i8)
             elif target_type == Type.pointer(Type.int(8)):
                 return None
         return value
@@ -732,29 +764,29 @@ class Helper:
             i1 = Type.int(1)
             if target_type == d:
                 if value.type != d:
-                    # if builder:
-                    #     value = builder.sitofp(value, d)
-                    # else:
-                    value = value.sitofp(d)
+                    if builder:
+                        value = builder.sitofp(value, d)
+                    else:
+                        value = value.sitofp(d)
             elif target_type == i32:
                 if value.type == d:
                     return None
                 elif value.type == i1:
-                    # if builder:
-                    #     value = builder.zext(value, i32)
-                    # else:
+                    if builder:
+                        value = builder.zext(value, i32)
+                    else:
                         value = value.zext(i32)
                 else:
-                    # if builder:
-                    #     value = builder.sext(value, i32)
-                    # else:
-                    value = value.sext(i32)
+                    if builder:
+                        value = builder.sext(value, i32)
+                    else:
+                        value = value.sext(i32)
             elif target_type == i8:
                 if value.type == i1:
-                    # if builder:
-                    #     value = builder.zext(value, i8)
-                    # else:
-                    value = value.zext(i8)
+                    if builder:
+                        value = builder.zext(value, i8)
+                    else:
+                        value = value.zext(i8)
                 else:
                     return None
             elif target_type == Type.pointer(Type.int(8)):

@@ -1,12 +1,10 @@
-
-int max(int a, int b){
-    int c = a;
-    return 1;
-}
-
 int main(){
-    int a = 1;
+    int a = 3;
     int b = 1;
-    return max(a, b);
+    String s = "abc";
+    while(a>b)
+        if(a > b * b)
+            a = a - 1;
+    return a;
 }
 
