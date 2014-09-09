@@ -12,10 +12,10 @@ func_table = {}
 constant_string_num = 0
 
 g_llvm_pass_manager = FunctionPassManager.new(g_llvm_module)
-# g_llvm_pass_manager.add(PASS_INSTCOMBINE)
-# g_llvm_pass_manager.add(PASS_REASSOCIATE)
-# g_llvm_pass_manager.add(PASS_GVN)
-# g_llvm_pass_manager.add(PASS_SIMPLIFYCFG)
+g_llvm_pass_manager.add(PASS_INSTCOMBINE)
+g_llvm_pass_manager.add(PASS_REASSOCIATE)
+g_llvm_pass_manager.add(PASS_GVN)
+g_llvm_pass_manager.add(PASS_SIMPLIFYCFG)
 g_llvm_pass_manager.initialize()
 
 g_llvm_executor = ExecutionEngine.new(g_llvm_module)
