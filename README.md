@@ -3,7 +3,7 @@ CMinusCompiler
 
 A C-style compiler with llvmpy
 
-How to use:
+Usage:
 ===========
 
 1. Download LLVM3.4 http://www.llvm.org/releases/download.html#3.4 ,
@@ -34,5 +34,5 @@ try to put them in version 1.5.
 
 Progress
 =========
-    I am working on adding built-in functions and while-loop, after which I will publish it as version 1.0.
+    Version1.0. I will try to add pointer in next subversion
 
