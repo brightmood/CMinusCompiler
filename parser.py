@@ -94,7 +94,13 @@ class Parser:
                 raise cmexception.SyntaxException(look_forward_2, [';', '[', '='])
         elif token.word == 'extern':
             self.move_for_n(1)
-            return self.parse_func_prototype()
+            prototype = self.parse_func_prototype()
+            current = self.get_current_token()
+            if current.word == ';':
+                self.move_for_n(1)
+                return prototype
+            else:
+                raise cmexception.SyntaxException(token, [';'])
         else:
             raise cmexception.SyntaxException(token, ['int', 'double', 'String', 'char'])
 
@@ -412,7 +418,9 @@ class Parser:
             return
         else:
             valuelist.append(self.parse_expr_or_string())
-            valuelist.extend(self.parse_comma_expr_list())
+            rest = self.parse_comma_expr_list()
+            if rest is not None:
+                valuelist.extend(rest)
             return valuelist
 
     def parse_comma_expr_list(self):

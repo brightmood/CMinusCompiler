@@ -1,8 +1,8 @@
-from llvm.core import Module, Constant, Type, Function, Builder, GlobalVariable, ConstantArray
+from llvm.core import Module, Constant, Type, Function, Builder, GlobalVariable, ConstantArray, Argument
 from llvm.core import IPRED_EQ, IPRED_NE, IPRED_SGT, IPRED_SGE, IPRED_SLT, IPRED_SLE
 from llvm.core import RPRED_UEQ, RPRED_UGT, RPRED_UGE, RPRED_ULT, RPRED_ULE, RPRED_UNE
 from llvm.ee import ExecutionEngine, TargetData
-from llvm.passes import FunctionPassManager
+from llvm.passes import *
 import cmexception
 from lexer import LexmeType
 
@@ -10,9 +10,15 @@ g_llvm_module = Module.new('CMCompiler')
 g_llvm_builder = None
 func_table = {}
 constant_string_num = 0
+
 g_llvm_pass_manager = FunctionPassManager.new(g_llvm_module)
-g_llvm_executor = ExecutionEngine.new(g_llvm_module)
+# g_llvm_pass_manager.add(PASS_INSTCOMBINE)
+# g_llvm_pass_manager.add(PASS_REASSOCIATE)
+# g_llvm_pass_manager.add(PASS_GVN)
+# g_llvm_pass_manager.add(PASS_SIMPLIFYCFG)
 g_llvm_pass_manager.initialize()
+
+g_llvm_executor = ExecutionEngine.new(g_llvm_module)
 
 
 #Base class of each Abstract Syntax Tree Node
@@ -414,9 +420,8 @@ class FunctionNode(ASTNode):
         block = function_prototype.append_basic_block('entry')
         global g_llvm_builder
         g_llvm_builder = Builder.new(block)
-        for arg in self.prototype.args:
-            t = context.type_table[arg[0]]
-            context.value_table[arg[0]] = g_llvm_builder.alloca(t)
+        for i in range(len(self.prototype.args)):
+            context.value_table[self.prototype.args[i][0]] = function_prototype.args[i]
         if self.body:
             for stmt in self.body:
                 stmt.code_gen()
@@ -582,23 +587,28 @@ class VariableNode(ASTNode):
     def code_gen(self):
         if self.var_name_token.word in self.context.type_table:
             t = self.context.type_table[self.var_name_token.word]
-            if str(t) == 'i8*':
-                return self.context.value_table[self.var_name_token.word]
+            # if str(t) == 'i8*':
+            #     return self.context.value_table[self.var_name_token.word]
+            # else:
+            value = self.context.value_table[self.var_name_token.word]
+            if isinstance(value, Argument):
+                return value
             else:
                 if g_llvm_builder is not None:
-                    return g_llvm_builder.load(
-                        self.context.value_table[self.var_name_token.word])
+                    return g_llvm_builder.load(value)
                 else:
                     raise cmexception.GlobalStatementAssignException(self.var_name_token)
         else:
             if self.context.parent_context is not None:
                 if self.var_name_token.word in self.context.parent_context.type_table:
-                    t = self.context.parent_context.type_table[self.var_name_token.word]
-                    if str(t) == 'i8*':
-                        return self.context.parent_context.value_table[self.var_name_token.word]
-                    else:
-                        return g_llvm_builder.load(
-                            self.context.parent_context.value_table[self.var_name_token.word])
+                    # t = self.context.parent_context.type_table[self.var_name_token.word]
+                    # if str(t) == 'i8*':
+                    #     return self.context.parent_context.value_table[self.var_name_token.word]
+                    # else:
+                    value = self.context.parent_context.value_table[self.var_name_token.word]
+                    if isinstance(value, Argument):
+                        return value
+                    return g_llvm_builder.load(value)
                 else:
                     raise cmexception.NotDefinedException(self.var_name_token)
             else:
@@ -624,12 +634,12 @@ class ArrayVariableNode(ASTNode):
         else:
             if self.context.parent_context is not None:
                 if self.array_name_token.word in self.context.parent_context.type_table:
-                    t = self.context.parent_context.type_table[self.array_name_token.word]
-                    if str(t) == 'i8*':
-                        return self.context.parent_context.value_table[self.array_name_token.word]
-                    else:
-                        return g_llvm_builder.load(
-                            self.context.parent_context.value_table[self.array_name_token.word])
+                    # t = self.context.parent_context.type_table[self.array_name_token.word]
+                    # if str(t) == 'i8*':
+                    #     return self.context.parent_context.value_table[self.array_name_token.word]
+                    # else:
+                    return g_llvm_builder.load(
+                        self.context.parent_context.value_table[self.array_name_token.word])
                 else:
                     raise cmexception.NotDefinedException(self.array_name_token)
             else:
@@ -645,8 +655,14 @@ class FunctionCallNode(ASTNode):
     def code_gen(self):
         callee = g_llvm_module.get_function_named(self.func_name_token.word)
         if len(callee.args) != len(self.args):
-            raise RuntimeError('Incorrect number of arguments passed.')
-        return g_llvm_builder.call(callee, [arg.code_gen() for arg in self.args], 'calltmp')
+            raise cmexception.FunctionCallNotMatchedException(self.func_name_token, callee.args, self.args, 2)
+        arglist = [arg.code_gen() for arg in self.args]
+        for i in range(len(callee.args)):
+            if callee.args[i].type != arglist[i].type:
+                raise cmexception.FunctionCallNotMatchedException(
+                    self.func_name_token, Helper.get_type_string(callee.args[i].type),
+                    Helper.get_type_string(arglist[i].type), 3, i+1)
+        return g_llvm_builder.call(callee, arglist, 'calltmp')
 
 
 class VoidValue:

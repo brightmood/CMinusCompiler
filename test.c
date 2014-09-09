@@ -1,10 +1,21 @@
-int main(){
-    int a = 3;
-    int b = 1;
+extern int puts(String s);
+
+int max(int a, int b)
+{
     String s = "abc";
-    while(a>b)
-        if(a > b * b)
-            a = a - 1;
-    return a;
+    if(a>b)
+    {
+        puts(s);
+        return a;
+    }
+
+    else
+        return b;
 }
 
+int main()
+{
+    int a = 2;
+    int b = 1;
+    int c = max(a, b);
+}

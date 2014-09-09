@@ -108,13 +108,24 @@ class FunctionReturnTypeNotMatchedException(CMException):
 #errno = 1 means that function doesn't exist
 #errno = 2 means that arguments number doesn't match
 #errno = 3 means that arguments type doesn't match
-class FunctionArgumentsNotMatchedException(CMException):
+class FunctionCallNotMatchedException(CMException):
 
-    def __init__(self, func_name_token, expected_arg_list, actual_arg_list, errno):
+    def __init__(self, func_name_token, expected_arg_list, actual_arg_list, errno, number):
         CMException.__init__(self, func_name_token)
         self.expected_arg_list = expected_arg_list
         self.actual_arg_list = actual_arg_list
         self.errno = errno
+        self.number = number
+
+    def to_string(self):
+        if self.errno == 1:
+            return "Function %s has not been declared" % self.token.word
+        if self.errno == 2:
+            return "Function %s need %d parameters but is called with %d parameters" \
+                   % (self.token.word, len(self.expected_arg_list), len(self.actual_arg_list))
+        if self.errno == 3:
+            return "Function %s call error. The %dth parameter is of type %s but called with %s" \
+                   % (self.token.word, self.number, self.expected_arg_list, self.actual_arg_list)
 
 
 class GlobalStatementAssignException(CMException):
