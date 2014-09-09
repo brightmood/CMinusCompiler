@@ -19,7 +19,7 @@ Good news:
 
 1. You can use functions, arrays, and global variable like C.
 2. You can use type casting like C.
-3. It supports four data types: char, int, double and String. All of them is singed.
+3. It supports four data types: char, int, double and String. All of them is signed.
 4. Bit computing and logic computing is supported.
 
 Bad news:
