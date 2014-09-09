@@ -136,5 +136,5 @@ class GlobalStatementAssignException(CMException):
     def to_string(self):
 
         return "Syntax error at line %d column %d, " \
-               "Right value of global statement should be " \
-               % (self.token.line_num, self.token.column_num, self.token.word)
+               "Right value of global statement should be a constant" \
+               % (self.token.line_num, self.token.column_num)
