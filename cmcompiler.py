@@ -23,7 +23,7 @@ if __name__ == '__main__':
             except IOError, e:
                 print "Can not find source file"
             except CMException, cme:
-                print cme.to_string()
+                print cme
     else:
         print "No source file is specified"
 
